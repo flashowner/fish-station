@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 魔方 | Interactive Rubik's Cube</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#06060a; --text:#f7f8f8; --text2:#d0d6e0;
+      --text3:#8a8f98; --text4:#62666d;
+      --accent:#5e6ad2; --accent2:#7170ff; --accent3:#828fff;
+      --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.05);
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);width:100vw;height:100vh;overflow:hidden;}
+    #canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;}
+
+    .header{position:fixed;top:0;left:0;right:0;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;z-index:100;border-bottom:1px solid var(--border2);backdrop-filter:blur(14px);background:rgba(6,6,10,0.82);}
+    .logo{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;}
+    .logo-icon{width:24px;height:24px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;}
+    .badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--accent2);padding:2px 8px;border:1px solid var(--border2);border-radius:9999px;background:rgba(113,112,255,0.06);}
+
+    .title-bar{position:fixed;top:56px;left:0;right:0;text-align:center;z-index:10;pointer-events:none;}
+    .title-bar h1{font-size:34px;font-weight:500;letter-spacing:-0.8px;line-height:1.1;}
+    .title-bar h1 span{background:linear-gradient(135deg,var(--accent2),var(--accent3),#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .title-bar p{font-size:12px;color:var(--text3);margin-top:4px;}
+
+    .size-bar{position:fixed;top:118px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:8px;z-index:10;}
+    .size-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text4);letter-spacing:1px;text-transform:uppercase;margin-right:4px;}
+    .size-btn{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:var(--text3);padding:5px 14px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.02);cursor:pointer;transition:all 0.2s;}
+    .size-btn:hover{color:var(--text);border-color:rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);}
+    .size-btn.active{color:var(--accent2);border-color:rgba(113,112,255,0.35);background:rgba(113,112,255,0.1);}
+
+    .info{position:fixed;bottom:86px;left:0;right:0;text-align:center;z-index:10;pointer-events:none;}
+    .info-text{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text4);letter-spacing:0.3px;}
+    .info-text span{color:var(--accent2);}
+
+    .controls{position:fixed;bottom:24px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:10px;z-index:100;}
+    .btn{font-family:'Inter',sans-serif;font-size:13px;font-weight:500;color:var(--text2);padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.03);cursor:pointer;transition:all 0.2s;}
+    .btn:hover{background:rgba(255,255,255,0.06);color:var(--text);border-color:rgba(255,255,255,0.14);}
+    .btn:active{transform:scale(0.97);}
+    .mc{display:flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02);}
+    .mc-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text4);letter-spacing:1px;text-transform:uppercase;}
+    .mc-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:500;color:var(--accent2);min-width:24px;text-align:center;}
+    .mc-val.bump{animation:bumpA .2s;}
+    @keyframes bumpA{0%{transform:scale(1)}50%{transform:scale(1.35)}100%{transform:scale(1)}}
+
+    #loading{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:9999;background:var(--bg);}
+    #loading span{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text3);animation:loadPulse 1.5s infinite;}
+    @keyframes loadPulse{0%,100%{opacity:0.4}50%{opacity:1}}
+
+    @media(max-width:600px){.title-bar h1{font-size:26px;}.controls{gap:6px;}.btn{padding:7px 12px;font-size:12px;}.size-btn{padding:4px 10px;font-size:11px;}}
+
+    /* ---- Tips Panel ---- */
+    .tips-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s;}
+    .tips-overlay.show{opacity:1;pointer-events:all;}
+    .tips-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.95);width:min(520px,92vw);max-height:80vh;z-index:201;background:#0d0e12;border:1px solid rgba(255,255,255,0.1);border-radius:14px;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity 0.3s,transform 0.3s;}
+    .tips-panel.show{opacity:1;pointer-events:all;transform:translate(-50%,-50%) scale(1);}
+    .tips-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);}
+    .tips-title{font-size:15px;font-weight:600;color:var(--text);}
+    .tips-close{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.2s;}
+    .tips-close:hover{color:var(--text);background:rgba(255,255,255,0.06);}
+    .tips-body{padding:16px 20px;overflow-y:auto;flex:1;}
+    .tips-tabs{display:flex;gap:6px;margin-bottom:16px;}
+    .tips-tab{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;color:var(--text3);padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.02);cursor:pointer;transition:all 0.2s;}
+    .tips-tab:hover{color:var(--text);border-color:rgba(255,255,255,0.14);}
+    .tips-tab.active{color:var(--accent2);border-color:rgba(113,112,255,0.35);background:rgba(113,112,255,0.1);}
+    .tips-content h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;}
+    .tips-desc{font-size:13px;color:var(--text3);margin-bottom:14px;line-height:1.6;}
+    .tips-content.hidden{display:none;}
+
+    .step-list{display:flex;flex-direction:column;gap:10px;}
+    .step{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid var(--border2);}
+    .step-num{flex-shrink:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(113,112,255,0.15);color:var(--accent2);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;}
+    .step div{font-size:13px;color:var(--text2);line-height:1.5;}
+    .step div b{color:var(--text);}
+
+    .notation-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+    .notation-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid var(--border2);}
+    .notation-letter{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:var(--accent2);min-width:28px;text-align:center;}
+    .notation-meaning{font-size:13px;color:var(--text3);}
+
+    .formula-list{display:flex;flex-direction:column;gap:10px;}
+    .formula-card{padding:12px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid var(--border2);}
+    .formula-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;}
+    .formula-code{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--accent2);background:rgba(113,112,255,0.08);padding:8px 12px;border-radius:6px;margin-bottom:6px;letter-spacing:0.5px;overflow-x:auto;}
+    .formula-use{font-size:12px;color:var(--text4);}
+
+    .tips-tip{margin-top:14px;padding:10px 14px;border-radius:8px;background:rgba(113,112,255,0.06);border:1px solid rgba(113,112,255,0.15);font-size:13px;color:var(--text2);line-height:1.6;}
+  </style>
+</head>
+<body>
+
+  <div id="loading"><span>Loading Three.js …</span></div>
+
+  <header class="header">
+    <div class="logo"><div class="logo-icon">🧊</div>3D Magic Cube</div>
+    <div class="badge">AI Generated</div>
+  </header>
+  <div class="title-bar">
+    <h1>3D <span>魔方</span></h1>
+    <p>左键拖拽方块旋转行列 · 右键拖拽旋转视角 · 滚轮缩放</p>
+  </div>
+  <div class="size-bar">
+    <span class="size-label">Size</span>
+    <button class="size-btn" data-n="2">2×2</button>
+    <button class="size-btn active" data-n="3">3×3</button>
+    <button class="size-btn" data-n="4">4×4</button>
+    <button class="size-btn" data-n="5">5×5</button>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div class="info"><p class="info-text"><span>左键拖拽方块</span> 旋转行列 · <span>右键拖拽</span> 旋转视角 · <span>滚轮</span> 缩放</p></div>
+  <div class="controls">
+    <button class="btn" id="btnScramble">打乱</button>
+    <button class="btn" id="btnReset">重置</button>
+    <button class="btn" id="btnUndo">撤销</button>
+    <button class="btn" id="btnTips">技巧</button>
+    <div class="mc"><span class="mc-label">Moves</span><span class="mc-val" id="moveCount">0</span></div>
+  </div>
+
+  <!-- Tips Panel -->
+  <div class="tips-overlay" id="tipsOverlay"></div>
+  <div class="tips-panel" id="tipsPanel">
+    <div class="tips-header">
+      <span class="tips-title">魔方还原技巧</span>
+      <button class="tips-close" id="tipsClose">✕</button>
+    </div>
+    <div class="tips-body">
+      <div class="tips-tabs">
+        <button class="tips-tab active" data-tab="beginner">入门层先法</button>
+        <button class="tips-tab" data-tab="notation">符号说明</button>
+        <button class="tips-tab" data-tab="formula">常用公式</button>
+      </div>
+
+      <div class="tips-content" id="tab-beginner">
+        <h3>3分钟看懂魔方还原</h3>
+        <p class="tips-desc">魔方不是一面一面拼的，而是一<b>层</b>一层从下往上还原。总共只需记住3个动作：</p>
+        <div class="step-list">
+          <div class="step"><span class="step-num">①</span><div><b>拼底层十字</b><br>找到白色棱块（只有两个颜色的小块），把它们转到底面，让侧面颜色和中心块对齐。这一步不需要公式，靠观察就行。</div></div>
+          <div class="step"><span class="step-num">②</span><div><b>拼好底层四个角</b><br>找到带白色的角块（三个颜色的小块），把它转到正确位置。核心口诀：<b>远切回回，接孩子放学</b>——把角块移到远离目标位（远）、转动一层（切）、回来（回回）、再把它送到位。</div></div>
+          <div class="step"><span class="step-num">③</span><div><b>拼中间层</b><br>找一个不含黄色的棱块放顶层，判断它要去左边还是右边，用对应公式插入。去右边：<b>上 右 上' 右' 上' 前' 上 前</b></div></div>
+          <div class="step"><span class="step-num">④</span><div><b>拼顶层十字</b><br>只看顶层黄色面，先不管角块。用公式 <b>前 右 上 右' 上' 前'</b>，可能需要做1~3次，直到出现黄色十字。</div></div>
+          <div class="step"><span class="step-num">⑤</span><div><b>顶层全部翻黄</b><br>十字有了但顶面还没全黄？用 <b>右 上 右' 上 右 上上 右'</b>（小鱼公式），重复做直到全黄。</div></div>
+          <div class="step"><span class="step-num">⑥</span><div><b>调角块位置</b><br>顶面全黄了，但侧面颜色可能不对。找到两个相邻的同色角块，把它们放到后面，用公式调整。</div></div>
+          <div class="step"><span class="step-num">⑦</span><div><b>调棱块位置</b><br>最后一步！如果棱块位置不对，做一次公式就能调好。恭喜，魔方还原完成！🎉</div></div>
+        </div>
+        <div class="tips-tip">💡 <b>学习顺序：</b>先不看公式，自己玩明白①②③步 → 再背④⑤的公式 → ⑥⑦进阶慢慢来。大部分人2-3天就能学会前5步！</div>
+      </div>
+
+      <div class="tips-content hidden" id="tab-notation">
+        <h3>看懂公式只需知道一件事</h3>
+        <p class="tips-desc">每个字母 = 转对应那一<b>面</b>，没有标记就顺时针转90°：</p>
+        <div class="notation-grid">
+          <div class="notation-item"><span class="notation-letter">R</span><span class="notation-meaning">右面 转一下</span></div>
+          <div class="notation-item"><span class="notation-letter">R'</span><span class="notation-meaning">右面 反着转</span></div>
+          <div class="notation-item"><span class="notation-letter">L</span><span class="notation-meaning">左面 转一下</span></div>
+          <div class="notation-item"><span class="notation-letter">L'</span><span class="notation-meaning">左面 反着转</span></div>
+          <div class="notation-item"><span class="notation-letter">U</span><span class="notation-meaning">上面 转一下</span></div>
+          <div class="notation-item"><span class="notation-letter">U'</span><span class="notation-meaning">上面 反着转</span></div>
+          <div class="notation-item"><span class="notation-letter">F</span><span class="notation-meaning">前面 转一下</span></div>
+          <div class="notation-item"><span class="notation-letter">F'</span><span class="notation-meaning">前面 反着转</span></div>
+        </div>
+        <div class="tips-tip">💡 <b>怎么判断顺时针？</b>把那一面正对着你看，像时钟一样转就是顺时针。带 <b>'</b> 的就反过来转。带 <b>2</b> 的转180°（转两下）。</div>
+      </div>
+
+      <div class="tips-content hidden" id="tab-formula">
+        <h3>只需背3个公式</h3>
+        <p class="tips-desc">刚开始不用全背，先记住这3个最常用的就够了：</p>
+        <div class="formula-list">
+          <div class="formula-card">
+            <div class="formula-name">① 右手公式（中层右插）</div>
+            <div class="formula-code">U  R  U' R'  U' F' U  F</div>
+            <div class="formula-use">口诀：上右上右反上前上前</div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-name">② 左手公式（中层左插）</div>
+            <div class="formula-code">U' L' U  L  U  F  U' F'</div>
+            <div class="formula-use">口诀：上反左上左上前上前反</div>
+          </div>
+          <div class="formula-card">
+            <div class="formula-name">③ 小鱼公式（顶层翻黄）</div>
+            <div class="formula-code">R  U  R' U  R  U2 R'</div>
+            <div class="formula-use">口诀：右上右反上右上上右反</div>
+          </div>
+        </div>
+        <div class="tips-tip">🎯 <b>练习建议：</b>先只练"右手公式"，把它练到闭眼都能做。会了右手公式，左手公式就是镜像动作。小鱼公式最后再背。一天练20分钟，3天就能独立还原！</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js (non-module, works in all browsers) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+  /* global THREE */
+  try {
+
+  // ============================================================
+  //  Constants
+  // ============================================================
+  var CUBIE_SIZE  = 0.84;
+  var ROT_DUR     = 260;
+  var DRAG_THRESH = 14;
+  var FACE_COLORS = {
+    right:0xe74c3c, left:0xf39c12, top:0xecf0f1,
+    bottom:0xf1c40f, front:0x3498db, back:0x2ecc71, inner:0x111118,
+  };
+
+  // ============================================================
+  //  State
+  // ============================================================
+  var S = { N:3, cubies:[], animating:false, moves:0, history:[],
+    dragging:false, dragFired:false, dragStart:null };
+
+  // ============================================================
+  //  Renderer / Scene / Camera
+  // ============================================================
+  var canvas = document.getElementById('canvas');
+  var renderer = new THREE.WebGLRenderer({ canvas:canvas, antialias:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x06060a);
+
+  var camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 200);
+  camera.position.set(5, 4, 5);
+
+  // OrbitControls
+  var orbit = new THREE.OrbitControls(camera, canvas);
+  orbit.enableDamping = true;
+  orbit.dampingFactor = 0.06;
+  orbit.enablePan = false;
+  orbit.minDistance = 4.5;
+  orbit.maxDistance = 14;
+  orbit.mouseButtons = { LEFT:-1, MIDDLE:THREE.MOUSE.DOLLY, RIGHT:THREE.MOUSE.ROTATE };
+
+  // ============================================================
+  //  Lighting
+  // ============================================================
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  var dl1 = new THREE.DirectionalLight(0xffffff, 0.9);
+  dl1.position.set(5, 8, 4); scene.add(dl1);
+  var dl2 = new THREE.DirectionalLight(0x8888ff, 0.25);
+  dl2.position.set(-4, 3, -6); scene.add(dl2);
+  var pl = new THREE.PointLight(0x7170ff, 0.4, 20);
+  pl.position.set(0, 5, 0); scene.add(pl);
+
+  // ============================================================
+  //  Background — starfield + orbital rings + glow
+  // ============================================================
+
+  // Star particles
+  var STAR_N = 800;
+  var starVerts = new Float32Array(STAR_N * 3);
+  for (var si = 0; si < STAR_N; si++) {
+    var sr = 20 + Math.random() * 60;
+    var st = Math.random() * Math.PI * 2;
+    var sp = Math.acos(2 * Math.random() - 1);
+    starVerts[si*3]     = sr * Math.sin(sp) * Math.cos(st);
+    starVerts[si*3 + 1] = sr * Math.sin(sp) * Math.sin(st);
+    starVerts[si*3 + 2] = sr * Math.cos(sp);
+  }
+  var starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starVerts, 3));
+  var starMat = new THREE.PointsMaterial({
+    color:0x7170ff, size:0.18, transparent:true, opacity:0.55,
+    blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true,
+  });
+  var stars = new THREE.Points(starGeo, starMat);
+  scene.add(stars);
+
+  // Second layer — brighter, sparser
+  var STAR2_N = 120;
+  var star2V = new Float32Array(STAR2_N * 3);
+  for (var s2i = 0; s2i < STAR2_N; s2i++) {
+    var s2r = 15 + Math.random() * 50;
+    var s2t = Math.random() * Math.PI * 2;
+    var s2p = Math.acos(2 * Math.random() - 1);
+    star2V[s2i*3]     = s2r * Math.sin(s2p) * Math.cos(s2t);
+    star2V[s2i*3 + 1] = s2r * Math.sin(s2p) * Math.sin(s2t);
+    star2V[s2i*3 + 2] = s2r * Math.cos(s2p);
+  }
+  var star2Geo = new THREE.BufferGeometry();
+  star2Geo.setAttribute('position', new THREE.BufferAttribute(star2V, 3));
+  var star2Mat = new THREE.PointsMaterial({
+    color:0xa78bfa, size:0.35, transparent:true, opacity:0.7,
+    blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true,
+  });
+  var stars2 = new THREE.Points(star2Geo, star2Mat);
+  scene.add(stars2);
+
+  // Orbital rings
+  function makeRing(radius, color, opacity, tubeW) {
+    var m = new THREE.Mesh(
+      new THREE.TorusGeometry(radius, tubeW || 0.012, 2, 150),
+      new THREE.MeshBasicMaterial({ color:color, transparent:true, opacity:opacity, side:THREE.DoubleSide })
+    );
+    return m;
+  }
+  var ring1 = makeRing(4.2, 0x5e6ad2, 0.20, 0.014);
+  ring1.rotation.x = Math.PI * 0.38; scene.add(ring1);
+  var ring2 = makeRing(5.0, 0x7170ff, 0.12, 0.009);
+  ring2.rotation.x = -Math.PI * 0.28; ring2.rotation.y = Math.PI * 0.4; scene.add(ring2);
+  var ring3 = makeRing(3.6, 0xa78bfa, 0.10, 0.018);
+  ring3.rotation.x = Math.PI * 0.55; ring3.rotation.z = Math.PI * 0.2; scene.add(ring3);
+
+  // Glow sphere
+  var glowMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(2.8, 32, 32),
+    new THREE.MeshBasicMaterial({ color:0x5e6ad2, transparent:true, opacity:0.035 })
+  );
+  scene.add(glowMesh);
+
+  // ============================================================
+  //  Raycaster
+  // ============================================================
+  var raycaster = new THREE.Raycaster();
+
+  // ============================================================
+  //  Cube builder — variable N
+  // ============================================================
+  function buildCube(N) {
+    // Cancel any in-progress scramble
+    if (S._scrambleTimer) { clearTimeout(S._scrambleTimer); S._scrambleTimer = null; }
+    S.cubies.forEach(function(c){ scene.remove(c.mesh); });
+    S.cubies = []; S.N = N; S.moves = 0; S.history = [];
+    S.animating = false;
+    bumpMC();
+
+    var off = (N - 1) / 2;
+    var geo = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
+    var edg = new THREE.EdgesGeometry(geo);
+    var eMat = new THREE.LineBasicMaterial({ color:0x000000 });
+
+    for (var ii = 0; ii < N; ii++) {
+      for (var jj = 0; jj < N; jj++) {
+        for (var kk = 0; kk < N; kk++) {
+          if (ii > 0 && ii < N-1 && jj > 0 && jj < N-1 && kk > 0 && kk < N-1) continue;
+          var cx = ii - off, cy = jj - off, cz = kk - off;
+          var t = 0.01;
+          var mats = [
+            fMat(Math.abs(cx - off) < t ? FACE_COLORS.right  : FACE_COLORS.inner),
+            fMat(Math.abs(cx + off) < t ? FACE_COLORS.left   : FACE_COLORS.inner),
+            fMat(Math.abs(cy - off) < t ? FACE_COLORS.top    : FACE_COLORS.inner),
+            fMat(Math.abs(cy + off) < t ? FACE_COLORS.bottom : FACE_COLORS.inner),
+            fMat(Math.abs(cz - off) < t ? FACE_COLORS.front  : FACE_COLORS.inner),
+            fMat(Math.abs(cz + off) < t ? FACE_COLORS.back   : FACE_COLORS.inner),
+          ];
+          var mesh = new THREE.Mesh(geo, mats);
+          mesh.position.set(cx, cy, cz);
+          mesh.add(new THREE.LineSegments(edg, eMat));
+          S.cubies.push({ mesh:mesh, pos:{x:cx, y:cy, z:cz} });
+          scene.add(mesh);
+        }
+      }
+    }
+
+    // Adjust camera for cube size
+    var dist = 4.5 + (N - 2) * 1.1;
+    orbit.minDistance = dist * 0.7;
+    orbit.maxDistance = dist * 2.8;
+    if (camera.position.length() < dist * 0.9) {
+      camera.position.normalize().multiplyScalar(dist);
+    }
+  }
+
+  function fMat(color) {
+    return new THREE.MeshPhysicalMaterial({
+      color:color, metalness:0.05, roughness:0.28,
+      clearcoat:0.85, clearcoatRoughness:0.08,
+    });
+  }
+
+  function snapVal(v) {
+    var off = (S.N - 1) / 2;
+    return Math.round(v + off) - off;
+  }
+
+  // ============================================================
+  //  UI refs (must be before buildCube which calls bumpMC)
+  // ============================================================
+  var mcEl = document.getElementById('moveCount');
+  function bumpMC() {
+    mcEl.textContent = S.moves;
+    mcEl.classList.remove('bump');
+    void mcEl.offsetWidth;
+    mcEl.classList.add('bump');
+  }
+
+  buildCube(3);
+
+  // ============================================================
+  //  Pointer helpers
+  // ============================================================
+  function pNorm(e) {
+    var r = canvas.getBoundingClientRect();
+    return {
+      nx: ((e.clientX - r.left) / r.width) * 2 - 1,
+      ny: -((e.clientY - r.top) / r.height) * 2 + 1,
+      sx: e.clientX, sy: e.clientY,
+    };
+  }
+
+  function castCube(p) {
+    raycaster.setFromCamera(new THREE.Vector2(p.nx, p.ny), camera);
+    var meshes = S.cubies.map(function(c){ return c.mesh; });
+    var hits = raycaster.intersectObjects(meshes, false);
+    if (!hits.length) return null;
+    var h = hits[0];
+    var n = h.face.normal.clone().transformDirection(h.object.matrixWorld);
+    n.x = Math.round(n.x); n.y = Math.round(n.y); n.z = Math.round(n.z);
+    return { point:h.point.clone(), normal:n, mesh:h.object };
+  }
+
+  function cubieOf(mesh) {
+    for (var i = 0; i < S.cubies.length; i++) {
+      if (S.cubies[i].mesh === mesh) return S.cubies[i];
+    }
+    return null;
+  }
+
+  // ============================================================
+  //  Rotation from drag
+  // ============================================================
+  function calcRot(fN, hitPt, cPos, dx, dy) {
+    var camDir = new THREE.Vector3(); camera.getWorldDirection(camDir);
+    var camR = new THREE.Vector3().crossVectors(camDir, camera.up).normalize();
+    var camU = new THREE.Vector3().crossVectors(camR, camDir).normalize();
+
+    var drag3 = camR.clone().multiplyScalar(dx).add(camU.clone().multiplyScalar(-dy));
+    drag3.sub(fN.clone().multiplyScalar(drag3.dot(fN)));
+    if (drag3.lengthSq() < 1e-8) return null;
+    drag3.normalize();
+
+    var rot = new THREE.Vector3().crossVectors(fN, drag3);
+    var ax = Math.abs(rot.x), ay = Math.abs(rot.y), az = Math.abs(rot.z);
+    var axis, dir, layer;
+    if (ax >= ay && ax >= az)       { axis='x'; dir=Math.sign(rot.x); layer=cPos.x; }
+    else if (ay >= ax && ay >= az)  { axis='y'; dir=Math.sign(rot.y); layer=cPos.y; }
+    else                            { axis='z'; dir=Math.sign(rot.z); layer=cPos.z; }
+    return { axis:axis, layer:snapVal(layer), direction:dir };
+  }
+
+  // ============================================================
+  //  Pointer events (capture phase beats OrbitControls)
+  // ============================================================
+  canvas.addEventListener('pointerdown', onDown, true);
+  canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  function onDown(e) {
+    if (e.button !== 0 || S.animating) return;
+    var p = pNorm(e);
+    var hit = castCube(p);
+    if (!hit) return;
+    e.stopPropagation();
+    orbit.enabled = false;
+    S.dragging = true; S.dragFired = false;
+    S.dragStart = { sx:p.sx, sy:p.sy, hitPt:hit.point, fN:hit.normal, cPos:cubieOf(hit.mesh).pos };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    canvas.style.cursor = 'grabbing';
+  }
+
+  function onMove(e) {
+    if (!S.dragging) return;
+    var dx = e.clientX - S.dragStart.sx, dy = e.clientY - S.dragStart.sy;
+    if (S.dragFired || Math.sqrt(dx*dx + dy*dy) < DRAG_THRESH) return;
+    S.dragFired = true;
+    var p = calcRot(S.dragStart.fN, S.dragStart.hitPt, S.dragStart.cPos, dx, dy);
+    if (p) doMove(p.axis, p.layer, p.direction);
+  }
+
+  function onUp() {
+    S.dragging = false; S.dragFired = false; S.dragStart = null;
+    orbit.enabled = true; canvas.style.cursor = '';
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  }
+
+  // ============================================================
+  //  Layer rotation animation
+  // ============================================================
+  function easeIO(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+
+  function doMove(axis, layer, dir, animated, record) {
+    if (animated === undefined) animated = true;
+    if (record === undefined) record = true;
+    if (S.animating) return;
+    S.animating = true;
+    if (record) S.history.push({ axis:axis, layer:layer, dir:dir });
+
+    var grp = new THREE.Group(); scene.add(grp);
+    var tol = 0.01;
+    var inL = S.cubies.filter(function(c){ return Math.abs(c.pos[axis] - layer) < tol; });
+    inL.forEach(function(c){ grp.attach(c.mesh); });
+
+    var target = dir * Math.PI / 2;
+    var t0 = performance.now(), dur = animated ? ROT_DUR : 0;
+
+    function tick(now) {
+      var t = Math.min((now - t0) / Math.max(dur, 1), 1);
+      grp.rotation.set(0, 0, 0);
+      grp.rotation[axis] = target * easeIO(t);
+      if (t < 1) { requestAnimationFrame(tick); return; }
+
+      inL.forEach(function(c) {
+        scene.attach(c.mesh);
+        c.mesh.position.x = snapVal(c.mesh.position.x);
+        c.mesh.position.y = snapVal(c.mesh.position.y);
+        c.mesh.position.z = snapVal(c.mesh.position.z);
+        c.pos.x = c.mesh.position.x;
+        c.pos.y = c.mesh.position.y;
+        c.pos.z = c.mesh.position.z;
+      });
+      scene.remove(grp);
+      S.animating = false;
+      if (record) { S.moves++; bumpMC(); }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // ============================================================
+  //  Scramble / Reset / Undo
+  // ============================================================
+  function getLayers() {
+    var L = [], off = (S.N - 1) / 2;
+    for (var i = 0; i < S.N; i++) L.push(i - off);
+    return L;
+  }
+
+  function scramble() {
+    if (S.animating) return;
+    if (S._scrambleTimer) { clearTimeout(S._scrambleTimer); }
+    S.history = []; S.moves = 0; bumpMC();
+    var axes = ['x','y','z'], dirs = [-1,1], layers = getLayers();
+    var count = {2:10, 3:22, 4:36, 5:50}[S.N] || 22;
+    var left = count;
+    var lastAxis = '', lastLayer = -999;
+    function next() {
+      if (left-- <= 0) { S._scrambleTimer = null; return; }
+      // Avoid repeating the same axis+layer consecutively
+      var axis, layer, dir;
+      do {
+        axis  = axes[Math.random()*3|0];
+        layer = layers[Math.random()*S.N|0];
+      } while (axis === lastAxis && layer === lastLayer);
+      dir = dirs[Math.random()*2|0];
+      lastAxis = axis; lastLayer = layer;
+      doMove(axis, layer, dir, true, false);
+      S._scrambleTimer = setTimeout(next, ROT_DUR + 35);
+    }
+    next();
+  }
+
+  function resetCube() { buildCube(S.N); }
+
+  function undo() {
+    if (S.animating || !S.history.length) return;
+    var m = S.history.pop();
+    doMove(m.axis, m.layer, -m.dir, true, false);
+    S.moves = Math.max(0, S.moves - 1); bumpMC();
+  }
+
+  // ============================================================
+  //  UI — buttons
+  // ============================================================
+  document.getElementById('btnScramble').onclick = scramble;
+  document.getElementById('btnReset').onclick = resetCube;
+  document.getElementById('btnUndo').onclick = undo;
+
+  // Tips panel
+  var tipsOverlay = document.getElementById('tipsOverlay');
+  var tipsPanel   = document.getElementById('tipsPanel');
+  function openTips()  { tipsOverlay.classList.add('show'); tipsPanel.classList.add('show'); }
+  function closeTips() { tipsOverlay.classList.remove('show'); tipsPanel.classList.remove('show'); }
+  document.getElementById('btnTips').onclick = openTips;
+  document.getElementById('tipsClose').onclick = closeTips;
+  tipsOverlay.onclick = closeTips;
+  document.querySelectorAll('.tips-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelector('.tips-tab.active').classList.remove('active');
+      tab.classList.add('active');
+      document.querySelectorAll('.tips-content').forEach(function(c){ c.classList.add('hidden'); });
+      document.getElementById('tab-' + tab.dataset.tab).classList.remove('hidden');
+    });
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'r' || e.key === 'R') scramble();
+    if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undo(); }
+  });
+
+  // Size selector
+  document.querySelectorAll('.size-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var N = parseInt(btn.dataset.n);
+      if (N === S.N) return;
+      var prev = document.querySelector('.size-btn.active');
+      if (prev) prev.classList.remove('active');
+      btn.classList.add('active');
+      buildCube(N);
+    });
+  });
+
+  // Resize
+  window.addEventListener('resize', function() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ============================================================
+  //  Render loop
+  // ============================================================
+  var clock = new THREE.Clock();
+  function loop() {
+    requestAnimationFrame(loop);
+    var t = clock.getElapsedTime();
+
+    orbit.update();
+
+    // Star field slow rotation + pulse
+    stars.rotation.y  = t * 0.008;
+    stars2.rotation.y = t * -0.012;
+    starMat.opacity  = 0.45 + Math.sin(t * 0.7) * 0.15;
+    star2Mat.opacity = 0.6  + Math.sin(t * 1.1 + 1.0) * 0.15;
+
+    // Rings rotate
+    ring1.rotation.z = t * 0.04;
+    ring2.rotation.z = t * -0.03;
+    ring3.rotation.y = t * 0.025;
+
+    // Glow breathe
+    glowMesh.material.opacity = 0.028 + Math.sin(t * 0.8) * 0.012;
+    glowMesh.scale.setScalar(1 + Math.sin(t * 0.4) * 0.04);
+
+    renderer.render(scene, camera);
+  }
+  loop();
+
+  // Hide loading screen
+  document.getElementById('loading').style.display = 'none';
+
+  } catch(err) {
+    document.getElementById('loading').innerHTML =
+      '<span style="color:#e74c3c;font-family:monospace;font-size:14px;">Error: ' +
+      err.message + '<br><br>请确认使用本地服务器打开：<br>python -m http.server 8080</span>';
+    console.error(err);
+  }
+  </script>
+</body>
+</html>
