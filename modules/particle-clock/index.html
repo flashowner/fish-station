@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>粒子时钟 | Particle Clock</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#06060a;--text:#f7f8f8;--text2:#d0d6e0;--text3:#8a8f98;--text4:#62666d;--accent:#5e6ad2;--accent2:#7170ff;--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.05);}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);width:100vw;height:100vh;overflow:hidden;}
+    canvas{display:block;position:fixed;top:0;left:0;z-index:1;}
+
+    .header{position:fixed;top:0;left:0;right:0;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;z-index:100;border-bottom:1px solid var(--border2);backdrop-filter:blur(14px);background:rgba(6,6,10,0.82);}
+    .logo{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;}
+    .logo-icon{width:24px;height:24px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;}
+    .badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--accent2);padding:2px 8px;border:1px solid var(--border2);border-radius:9999px;background:rgba(113,112,255,0.06);}
+
+    .controls{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;z-index:100;flex-wrap:wrap;justify-content:center;max-width:95vw;}
+    .btn{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;color:var(--text3);padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.03);cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+    .btn:hover{background:rgba(255,255,255,0.06);color:var(--text);border-color:rgba(255,255,255,0.14);}
+    .btn.active{color:var(--accent2);border-color:rgba(113,112,255,0.35);background:rgba(113,112,255,0.1);}
+    .divider{width:1px;height:20px;background:var(--border);margin:0 2px;}
+
+    .hint{position:fixed;bottom:62px;left:0;right:0;text-align:center;z-index:10;pointer-events:none;}
+    .hint-text{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text4);letter-spacing:0.3px;}
+    .hint-text span{color:var(--accent2);}
+
+    .back{position:fixed;top:62px;left:24px;z-index:100;text-decoration:none;}
+    .back-btn{font-size:12px;font-weight:500;color:var(--text3);padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.03);cursor:pointer;transition:all 0.2s;text-decoration:none;display:inline-flex;align-items:center;gap:4px;}
+    .back-btn:hover{background:rgba(255,255,255,0.06);color:var(--text);}
+
+    .stats{position:fixed;top:62px;right:24px;z-index:100;display:flex;gap:8px;align-items:center;}
+    .stat-item{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text4);padding:4px 10px;border:1px solid var(--border2);border-radius:4px;background:rgba(255,255,255,0.02);}
+    .stat-item span{color:var(--accent2);}
+    .settings-btn{font-family:'Inter',sans-serif;font-size:11px;font-weight:500;color:var(--text4);padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:rgba(255,255,255,0.02);cursor:pointer;transition:all 0.15s;}
+    .settings-btn:hover{color:var(--text);border-color:rgba(255,255,255,0.14);background:rgba(255,255,255,0.04);}
+
+    .settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;opacity:0;pointer-events:none;transition:opacity 0.3s;}
+    .settings-overlay.show{opacity:1;pointer-events:all;}
+    .settings-panel{position:fixed;top:0;right:0;width:300px;height:100%;background:#0d0e12;border-left:1px solid rgba(255,255,255,0.1);z-index:201;transform:translateX(100%);transition:transform 0.3s;overflow-y:auto;padding:20px;}
+    .settings-panel.show{transform:translateX(0);}
+    .settings-title{font-size:15px;font-weight:600;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
+    .settings-close{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;}
+    .settings-close:hover{color:var(--text);background:rgba(255,255,255,0.06);}
+    .setting-group{margin-bottom:18px;}
+    .setting-label{font-size:12px;color:var(--text3);margin-bottom:6px;display:flex;justify-content:space-between;}
+    .setting-label span{color:var(--accent2);font-family:'JetBrains Mono',monospace;}
+    .setting-range{width:100%;height:4px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,0.1);border-radius:2px;outline:none;}
+    .setting-range::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent2);cursor:pointer;border:2px solid var(--bg);}
+    .setting-input{width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;outline:none;}
+    .setting-input:focus{border-color:var(--accent2);}
+    .setting-input::placeholder{color:var(--text4);}
+    .setting-hint{font-size:11px;color:var(--text4);margin-top:4px;}
+    .setting-btn{width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--text2);font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s;}
+    .setting-btn:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.14);}
+
+    .loading-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999;background:var(--bg);}
+    .loading-overlay span{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text3);animation:lp 1.5s infinite;}
+    @keyframes lp{0%,100%{opacity:0.4}50%{opacity:1}}
+    .loading-overlay.hide{opacity:0;pointer-events:none;transition:opacity 0.5s;}
+
+    @media(max-width:600px){.stats{display:none;}.settings-panel{width:100%;}}
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loading"><span>Loading fonts…</span></div>
+  <header class="header"><div class="logo"><div class="logo-icon">⏰</div>粒子时钟</div><div class="badge">AI Generated</div></header>
+  <a class="back" href="../index.html"><span class="back-btn">← 返回摸鱼小站</span></a>
+  <div class="stats">
+    <div class="stat-item">粒子 <span id="particleCount">0</span></div>
+    <div class="stat-item">FPS <span id="fpsCount">60</span></div>
+    <button class="settings-btn" id="btnSettings">⚙ 设置</button>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div class="hint"><p class="hint-text"><span>鼠标推开所有粒子</span> · <span>1-5配色</span> · <span>6连线</span> · <span>7发光</span> · <span>8立体</span> · <span>9爆炸</span></p></div>
+
+  <div class="controls">
+    <button class="btn active" data-color="purple">紫色</button>
+    <button class="btn" data-color="rainbow">彩虹</button>
+    <button class="btn" data-color="matrix">矩阵</button>
+    <button class="btn" data-color="fire">火焰</button>
+    <button class="btn" data-color="ice">冰蓝</button>
+    <span class="divider"></span>
+    <button class="btn active" id="btnLines">🕸 连线</button>
+    <button class="btn active" id="btnGlow">✨ 发光</button>
+    <button class="btn active" id="btnPin">📌 立体</button>
+    <button class="btn" id="btnBurst">💥 爆炸</button>
+    <span class="divider"></span>
+    <button class="btn" id="btnAttract">🧲 吸引: 关</button>
+    <button class="btn" id="btnGravity">⬇ 重力: 关</button>
+  </div>
+
+  <div class="settings-overlay" id="settingsOverlay"></div>
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-title">⚙ 设置<button class="settings-close" id="settingsClose">✕</button></div>
+    <div class="setting-group"><div class="setting-label">粒子大小 <span id="valRadius">2.2</span></div><input type="range" class="setting-range" id="slRadius" min="1" max="5" step="0.1" value="2.2"></div>
+    <div class="setting-group"><div class="setting-label">粒子密度 <span id="valGap">5</span></div><input type="range" class="setting-range" id="slGap" min="3" max="10" step="1" value="5"></div>
+    <div class="setting-group"><div class="setting-label">鼠标力度 <span id="valForce">50</span></div><input type="range" class="setting-range" id="slForce" min="10" max="200" step="5" value="50"></div>
+    <div class="setting-group"><div class="setting-label">连线距离 <span id="valLineDist">30</span></div><input type="range" class="setting-range" id="slLineDist" min="10" max="60" step="2" value="30"></div>
+    <div class="setting-group"><div class="setting-label">自定义文字</div><input type="text" class="setting-input" id="customText" placeholder="留空显示时间，输入后回车"><div class="setting-hint">输入任意文字，粒子排列成该文字</div></div>
+    <div class="setting-group"><button class="setting-btn" id="btnResetSettings">恢复默认设置</button></div>
+  </div>
+
+  <script>
+  // ============================================================
+  //  Config
+  // ============================================================
+  var CFG = {
+    particleGap: 5,
+    baseRadius: 2.2,
+    mouseForce: 50,
+    mouseFalloff: 0.0008,
+    returnLerp: 0.10,
+    dampening: 0.90,
+    settleSpeed: 0.08,
+    settleDist: 0.5,
+    colorScheme: 'purple',
+    gravity: false,
+    attract: false,
+    customText: '',
+    // 新增特效开关
+    showLines: true,     // 连线
+    showGlow: true,      // 发光
+    showPin: true,       // 图钉立体感
+    burstOnChange: false,// 数字变化爆炸
+    lineDist: 30,       // 连线最大距离
+  };
+
+  var COLORS = {
+    purple:  { hue: 260, sat: 80, lit: 70 },
+    rainbow: { hue: 0,   sat: 85, lit: 65 },
+    matrix:  { hue: 120, sat: 90, lit: 60 },
+    fire:    { hue: 15,  sat: 95, lit: 65 },
+    ice:     { hue: 195, sat: 80, lit: 75 },
+  };
+
+  // ============================================================
+  //  State
+  // ============================================================
+  var canvas = document.getElementById('canvas');
+  var ctx = canvas.getContext('2d');
+  var particles = [];
+  var mouse = { x: -999, y: -999, active: false };
+  var lastContent = '';
+  var frameCount = 0, lastFpsUpdate = 0;
+  var animating = false;
+  var rafId = null;
+
+  // ============================================================
+  //  Helpers
+  // ============================================================
+  function startWhenFontReady() {
+    var go = function() { document.getElementById('loading').classList.add('hide'); init(); };
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(go);
+    else setTimeout(go, 2000);
+  }
+
+  function resize() { canvas.width = innerWidth; canvas.height = innerHeight; lastContent = ''; syncContent(true); }
+  resize();
+  addEventListener('resize', resize);
+
+  canvas.addEventListener('mousemove', function(e) { mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true; kick(); });
+  canvas.addEventListener('mouseleave', function() { mouse.active = false; });
+  canvas.addEventListener('touchstart', function(e) { e.preventDefault(); mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; mouse.active = true; kick(); }, {passive:false});
+  canvas.addEventListener('touchmove', function(e) { e.preventDefault(); mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; kick(); }, {passive:false});
+  canvas.addEventListener('touchend', function() { mouse.active = false; });
+
+  function kick() { if (!animating) { animating = true; requestDraw(); } }
+
+  // ============================================================
+  //  Content
+  // ============================================================
+  function getContentStr() {
+    if (CFG.customText) return CFG.customText;
+    var n = new Date();
+    return ('0'+n.getHours()).slice(-2)+':'+('0'+n.getMinutes()).slice(-2)+':'+('0'+n.getSeconds()).slice(-2);
+  }
+
+  function samplePositions(text) {
+    var off = document.createElement('canvas');
+    var oc = off.getContext('2d');
+    var fs = Math.min(canvas.width * 0.13, 180);
+    off.width = canvas.width; off.height = canvas.height;
+    oc.fillStyle = '#fff';
+    oc.font = '800 ' + fs + 'px "JetBrains Mono", monospace';
+    oc.textAlign = 'center'; oc.textBaseline = 'middle';
+    oc.fillText(text, off.width/2, off.height/2);
+    oc.fillText(text, off.width/2, off.height/2);
+    var pos = [], img = oc.getImageData(0,0,off.width,off.height), g = CFG.particleGap;
+    for (var y=0; y<off.height; y+=g) for (var x=0; x<off.width; x+=g) {
+      if (img.data[(y*off.width+x)*4+3] > 80) pos.push({x:x, y:y});
+    }
+    return pos;
+  }
+
+  // ============================================================
+  //  Particle
+  // ============================================================
+  function Particle(x, y, animate) {
+    if (animate) { this.x = Math.random()*canvas.width; this.y = Math.random()*canvas.height; }
+    else { this.x = x; this.y = y; }
+    this.tx = x; this.ty = y;
+    this.vx = 0; this.vy = 0;
+    this.r = CFG.baseRadius + Math.random() * 0.8;
+    this.hueOff = Math.random() * 20 - 10;
+    this.alpha = 0.7 + Math.random() * 0.3;
+    this.moving = !!animate;
+    this.burstTimer = 0; // 爆炸效果倒计时
+  }
+
+  Particle.prototype.update = function() {
+    if (mouse.active) {
+      var dx = mouse.x - this.x, dy = mouse.y - this.y;
+      var distSq = dx*dx + dy*dy;
+      var force = CFG.mouseForce * Math.exp(-CFG.mouseFalloff * distSq);
+      var dist = Math.sqrt(distSq) || 1;
+      var sign = CFG.attract ? 1 : -1;
+      this.vx += sign * (dx / dist) * force;
+      this.vy += sign * (dy / dist) * force;
+    }
+    if (CFG.gravity) this.vy += 0.12;
+    if (this.burstTimer > 0) this.burstTimer--;
+
+    this.vx *= CFG.dampening;
+    this.vy *= CFG.dampening;
+    this.x += (this.tx - this.x) * CFG.returnLerp + this.vx;
+    this.y += (this.ty - this.y) * CFG.returnLerp + this.vy;
+
+    if (Math.abs(this.vx)+Math.abs(this.vy) < CFG.settleSpeed &&
+        Math.abs(this.x-this.tx)+Math.abs(this.y-this.ty) < CFG.settleDist) {
+      this.x=this.tx; this.y=this.ty; this.vx=0; this.vy=0; this.moving=false;
+    }
+  };
+
+  Particle.prototype.draw = function() {
+    var sc = COLORS[CFG.colorScheme];
+    var h = CFG.colorScheme === 'rainbow' ? (this.tx*0.25+this.ty*0.08)%360 : sc.hue+this.hueOff;
+
+    // 发光效果：底层大光晕
+    if (CFG.showGlow) {
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.r * 3.5, 0, Math.PI*2);
+      ctx.fillStyle = 'hsla('+h+','+sc.sat+'%,'+Math.min(sc.lit+20,95)+'%,0.06)';
+      ctx.fill();
+    }
+
+    // 爆炸瞬间变白
+    var lit = sc.lit;
+    var a = this.alpha;
+    if (this.burstTimer > 0) {
+      lit = Math.min(lit + this.burstTimer * 2, 98);
+      a = Math.min(a + 0.2, 1);
+    }
+
+    // 主粒子
+    if (CFG.showPin) {
+      // 阴影
+      ctx.beginPath(); ctx.arc(this.x+0.5, this.y+0.5, this.r, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fill();
+    }
+    // 主体
+    ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fillStyle = 'hsla('+h+','+sc.sat+'%,'+lit+'%,'+a+')';
+    ctx.fill();
+    if (CFG.showPin) {
+      // 高光
+      ctx.beginPath(); ctx.arc(this.x-this.r*0.25, this.y-this.r*0.25, this.r*0.35, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fill();
+    }
+  };
+
+  // ============================================================
+  //  连线效果
+  // ============================================================
+  function drawLines() {
+    var maxD = CFG.lineDist;
+    var maxDSq = maxD * maxD;
+    var sc = COLORS[CFG.colorScheme];
+    var baseHue = CFG.colorScheme === 'rainbow' ? 0 : sc.hue;
+
+    // 采样连线（跳过粒子提高性能）
+    var step = particles.length > 600 ? 3 : particles.length > 300 ? 2 : 1;
+    for (var i = 0; i < particles.length; i += step) {
+      for (var j = i + 1; j < particles.length; j += step) {
+        var dx = particles[i].x - particles[j].x;
+        var dy = particles[i].y - particles[j].y;
+        var dSq = dx*dx + dy*dy;
+        if (dSq < maxDSq) {
+          var d = Math.sqrt(dSq);
+          var alpha = (1 - d / maxD) * 0.2;
+          var h = CFG.colorScheme === 'rainbow'
+            ? (particles[i].tx*0.25 + particles[i].ty*0.08) % 360
+            : baseHue + particles[i].hueOff;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = 'hsla('+h+','+sc.sat+'%,'+sc.lit+'%,'+alpha+')';
+          ctx.lineWidth = alpha * 2;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // ============================================================
+  //  Sync — 变化的数字飞入 + 可选爆炸
+  // ============================================================
+  function syncContent(force) {
+    var content = getContentStr();
+    if (!force && content === lastContent) return;
+    var oldContent = lastContent;
+    lastContent = content;
+
+    var newPos = samplePositions(content);
+    var existMap = {};
+    for (var i = 0; i < particles.length; i++) {
+      existMap[Math.round(particles[i].tx)+','+Math.round(particles[i].ty)] = particles[i];
+    }
+
+    var np = [], hasNew = false;
+    for (var j = 0; j < newPos.length; j++) {
+      var key = newPos[j].x+','+newPos[j].y;
+      if (existMap[key]) { np.push(existMap[key]); delete existMap[key]; }
+      else { np.push(new Particle(newPos[j].x, newPos[j].y, true)); hasNew = true; }
+    }
+    particles = np;
+    document.getElementById('particleCount').textContent = particles.length;
+
+    // 数字变化爆炸效果
+    if (hasNew && CFG.burstOnChange && oldContent) {
+      for (var k = 0; k < particles.length; k++) {
+        var a = Math.random() * Math.PI * 2;
+        var f = 2 + Math.random() * 4;
+        particles[k].vx += Math.cos(a) * f;
+        particles[k].vy += Math.sin(a) * f;
+        particles[k].burstTimer = 15; // 15帧变白
+        particles[k].moving = true;
+      }
+    }
+
+    if (hasNew) { animating = true; requestDraw(); }
+  }
+
+  // ============================================================
+  //  Draw loop
+  // ============================================================
+  function requestDraw() { if (!rafId) rafId = requestAnimationFrame(draw); }
+
+  function draw(t) {
+    rafId = null;
+    frameCount++;
+    if (t - lastFpsUpdate > 500) {
+      document.getElementById('fpsCount').textContent = Math.round(frameCount/((t-lastFpsUpdate)/1000));
+      frameCount = 0; lastFpsUpdate = t;
+    }
+
+    syncContent(false);
+    ctx.fillStyle = '#06060a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 先画连线（在粒子下面）
+    if (CFG.showLines) drawLines();
+
+    var anyMoving = false;
+    for (var i = 0; i < particles.length; i++) {
+      particles[i].update();
+      if (particles[i].moving) anyMoving = true;
+      particles[i].draw();
+    }
+
+    if (anyMoving || mouse.active) { requestDraw(); }
+    else {
+      animating = false;
+      // 最终静帧
+      ctx.fillStyle = '#06060a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (CFG.showLines) drawLines();
+      for (var i = 0; i < particles.length; i++) particles[i].draw();
+    }
+  }
+
+  // ============================================================
+  //  Init
+  // ============================================================
+  function init() {
+    syncContent(true);
+    animating = true;
+    requestDraw();
+    setInterval(function(){ syncContent(false); }, 500);
+  }
+
+  // ============================================================
+  //  UI — 配色
+  // ============================================================
+  document.querySelectorAll('.btn[data-color]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelector('.btn[data-color].active').classList.remove('active');
+      btn.classList.add('active'); CFG.colorScheme = btn.dataset.color;
+      if (!animating) kick(); // 触发重绘
+    });
+  });
+
+  // ============================================================
+  //  UI — 特效开关
+  // ============================================================
+  document.getElementById('btnLines').onclick = function() {
+    CFG.showLines = !CFG.showLines;
+    this.classList.toggle('active', CFG.showLines);
+    if (!animating) kick();
+  };
+  document.getElementById('btnGlow').onclick = function() {
+    CFG.showGlow = !CFG.showGlow;
+    this.classList.toggle('active', CFG.showGlow);
+    if (!animating) kick();
+  };
+  document.getElementById('btnPin').onclick = function() {
+    CFG.showPin = !CFG.showPin;
+    this.classList.toggle('active', CFG.showPin);
+    if (!animating) kick();
+  };
+  document.getElementById('btnBurst').onclick = function() {
+    CFG.burstOnChange = !CFG.burstOnChange;
+    this.classList.toggle('active', CFG.burstOnChange);
+  };
+  document.getElementById('btnAttract').onclick = function() {
+    CFG.attract = !CFG.attract;
+    this.textContent = '🧲 吸引: ' + (CFG.attract ? '开' : '关');
+    this.classList.toggle('active', CFG.attract);
+  };
+  document.getElementById('btnGravity').onclick = function() {
+    CFG.gravity = !CFG.gravity;
+    this.textContent = '⬇ 重力: ' + (CFG.gravity ? '开' : '关');
+    this.classList.toggle('active', CFG.gravity);
+  };
+
+  // ============================================================
+  //  UI — 键盘快捷键
+  // ============================================================
+  document.addEventListener('keydown', function(e) {
+    var cm={'1':'purple','2':'rainbow','3':'matrix','4':'fire','5':'ice'};
+    if (cm[e.key]) {
+      CFG.colorScheme=cm[e.key];
+      document.querySelector('.btn[data-color].active').classList.remove('active');
+      document.querySelector('.btn[data-color="'+cm[e.key]+'"]').classList.add('active');
+      if(!animating) kick();
+    }
+    if (e.key==='6') document.getElementById('btnLines').click();
+    if (e.key==='7') document.getElementById('btnGlow').click();
+    if (e.key==='8') document.getElementById('btnPin').click();
+    if (e.key==='9') document.getElementById('btnBurst').click();
+  });
+
+  // ============================================================
+  //  UI — 设置面板
+  // ============================================================
+  var sOv = document.getElementById('settingsOverlay'), sPa = document.getElementById('settingsPanel');
+  function openSettings() { sOv.classList.add('show'); sPa.classList.add('show'); }
+  function closeSettings() { sOv.classList.remove('show'); sPa.classList.remove('show'); }
+  document.getElementById('btnSettings').onclick = openSettings;
+  document.getElementById('settingsClose').onclick = closeSettings;
+  sOv.onclick = closeSettings;
+
+  function applySettings() {
+    for (var i = 0; i < particles.length; i++) particles[i].r = CFG.baseRadius + Math.random() * 0.8;
+    if (!animating) kick();
+  }
+
+  document.getElementById('slRadius').oninput = function() {
+    CFG.baseRadius = parseFloat(this.value);
+    document.getElementById('valRadius').textContent = this.value;
+    applySettings();
+  };
+  document.getElementById('slForce').oninput = function() {
+    CFG.mouseForce = parseFloat(this.value);
+    document.getElementById('valForce').textContent = this.value;
+  };
+  document.getElementById('slGap').oninput = function() {
+    CFG.particleGap = parseInt(this.value);
+    document.getElementById('valGap').textContent = this.value;
+    lastContent = ''; syncContent(true);
+  };
+  document.getElementById('slLineDist').oninput = function() {
+    CFG.lineDist = parseInt(this.value);
+    document.getElementById('valLineDist').textContent = this.value;
+    if (!animating) kick();
+  };
+  document.getElementById('customText').onkeydown = function(e) {
+    if (e.key === 'Enter') {
+      CFG.customText = this.value.trim();
+      lastContent = ''; syncContent(true); closeSettings();
+    }
+  };
+  document.getElementById('btnResetSettings').onclick = function() {
+    CFG.particleGap=5; CFG.baseRadius=2.2; CFG.mouseForce=50; CFG.lineDist=30; CFG.customText='';
+    document.getElementById('slRadius').value=2.2; document.getElementById('slGap').value=5;
+    document.getElementById('slForce').value=50; document.getElementById('slLineDist').value=30;
+    document.getElementById('valRadius').textContent='2.2'; document.getElementById('valGap').textContent='5';
+    document.getElementById('valForce').textContent='50'; document.getElementById('valLineDist').textContent='30';
+    document.getElementById('customText').value='';
+    lastContent=''; syncContent(true); applySettings();
+  };
+
+  startWhenFontReady();
+  </script>
+</body>
+</html>
